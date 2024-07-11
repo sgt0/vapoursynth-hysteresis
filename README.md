@@ -16,10 +16,18 @@ Description from vs-miscfilters-obsolete:
 >
 > If we treat the planes of the clips as representing 8-neighbourhood undirected
 > 2D grid graphs, for each of the connected components in `clipb`, the whole
-> component is copied to the output plane if and only if one of its pixels is also
-> marked in the corresponding plane from `clipa`. The argument `planes` controls
-> which planes to process, with the default being all. Any unprocessed planes will
-> be copied from the corresponding plane in `clipa`.
+> component is copied to the output plane if and only if one of its pixels is
+> also marked in the corresponding plane from `clipa`. The argument `planes`
+> controls which planes to process, with the default being all. Any unprocessed
+> planes will be copied from the corresponding plane in `clipa`.
+
+## Install
+
+Windows: Download a release from the [Releases][] page and unzip
+`hysteresis.dll` into a [plugins directory][plugin-autoloading]. There are
+separate artifacts for Raptor Lake (`*-raptorlake.zip`) and AMD Zen 4
+(`*-znver4.zip`) CPUs which may or may not have better performance than the
+plain x86_64 build.
 
 ## API
 
@@ -31,5 +39,26 @@ hysteresis.Hysteresis(
 )
 ```
 
+## Build
+
+Rust v1.81.0-nightly and cargo may be used to build the project. Older versions
+will likely work fine but they aren't explicitly supported.
+
+```bash
+$ git clone https://github.com/sgt0/vapoursynth-hysteresis.git
+$ cd vapoursynth-hysteresis
+
+# Debug build.
+$ cargo build
+
+# Release (optimized) build.
+$ cargo build --release
+
+# Release build optimized for the host CPU.
+$ RUSTFLAGS="-C target-cpu=native" cargo build --release
+```
+
 [VapourSynth]: https://www.vapoursynth.com
 [vs-miscfilters-obsolete]: https://github.com/vapoursynth/vs-miscfilters-obsolete
+[Releases]: https://github.com/sgt0/vapoursynth-hysteresis/releases
+[plugin-autoloading]: https://www.vapoursynth.com/doc/installation.html#plugin-autoloading
