@@ -23,7 +23,13 @@ Description from vs-miscfilters-obsolete:
 
 ## Install
 
-Windows: Download a release from the [Releases][] page and unzip
+Via [vsrepo][]:
+
+```
+vsrepo install hysteresis
+```
+
+Or manually on Windows: download a release from the [Releases][] page and unzip
 `hysteresis.dll` into a [plugins directory][plugin-autoloading]. There are
 separate artifacts for Raptor Lake (`*-raptorlake.zip`) and AMD Zen 4
 (`*-znver4.zip`) CPUs which may or may not have better performance than the
@@ -60,5 +66,6 @@ $ RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 [VapourSynth]: https://www.vapoursynth.com
 [vs-miscfilters-obsolete]: https://github.com/vapoursynth/vs-miscfilters-obsolete
+[vsrepo]: https://github.com/vapoursynth/vsrepo
 [Releases]: https://github.com/sgt0/vapoursynth-hysteresis/releases
 [plugin-autoloading]: https://www.vapoursynth.com/doc/installation.html#plugin-autoloading
