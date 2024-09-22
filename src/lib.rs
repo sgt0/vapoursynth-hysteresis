@@ -9,6 +9,7 @@ use std::{
   collections::HashSet,
   ffi::{c_void, CStr},
   ptr::null,
+  slice,
 };
 
 use const_str::cstr;
@@ -26,6 +27,32 @@ use vapoursynth4_rs::{
   utils::{is_constant_video_format, is_same_video_info},
   ColorFamily, SampleType,
 };
+
+trait VideoFrameExt {
+  /// Returns the video frame's data as a slice.
+  fn as_slice<T>(&self, plane: i32) -> &[T];
+
+  /// Returns the video frame's data as a mutable slice.
+  fn as_slice_mut<T>(&mut self, plane: i32) -> &mut [T];
+}
+
+impl VideoFrameExt for VideoFrame {
+  #[inline]
+  fn as_slice<T>(&self, plane: i32) -> &[T] {
+    let stride = self.stride(plane) / size_of::<T>() as isize;
+    let ptr = self.plane(plane).cast::<T>();
+    let len = (stride as i32 * self.frame_height(plane)) as usize;
+    unsafe { slice::from_raw_parts(ptr, len) }
+  }
+
+  #[inline]
+  fn as_slice_mut<T>(&mut self, plane: i32) -> &mut [T] {
+    let stride = self.stride(plane) / size_of::<T>() as isize;
+    let ptr = self.plane(plane).cast::<T>().cast_mut();
+    let len = (stride as i32 * self.frame_height(plane)) as usize;
+    unsafe { slice::from_raw_parts_mut(ptr, len) }
+  }
+}
 
 /// Returns the peak value for the bit depth of the format specified.
 const fn peak_value(format: &VSVideoFormat) -> u32 {
@@ -112,60 +139,44 @@ impl HysteresisFilter {
 
     let mut visited = HashSet::<i32>::new();
 
-    for plane in 0..format.num_planes {
-      if !self.process_planes[plane as usize] {
-        continue;
-      }
-
+    for plane in (0..format.num_planes).filter(|&plane| self.process_planes[plane as usize]) {
       let width = src1.frame_width(plane);
       let height = src1.frame_height(plane);
-      let stride = src1.stride(plane) / size_of::<T>() as isize;
-      let src1_ptr: *const T = src1.plane(plane).cast();
-      let src2_ptr: *const T = src2.plane(plane).cast();
-      let dst_ptr: *mut T = dst.plane_mut(plane).cast();
+      let src1_slice = src1.as_slice::<T>(plane);
+      let src2_slice = src2.as_slice::<T>(plane);
+      let dst_slice = dst.as_slice_mut::<T>(plane);
 
-      for i in 0..stride * (height as isize) {
-        unsafe {
-          *dst_ptr.offset(i) = lower;
-        }
-      }
+      dst_slice.fill(lower);
 
       let mut coords = Vec::<(i32, i32)>::new();
 
-      for y in 0..height {
-        for x in 0..width {
-          let count = stride * (y as isize) + (x as isize);
-          if visited.contains(&(width * y + x))
-            || unsafe { *src1_ptr.offset(count) <= lower }
-            || unsafe { *src2_ptr.offset(count) <= lower }
-          {
-            continue;
-          }
+      for (i, (_, _)) in src1_slice
+        .iter()
+        .zip(src2_slice.iter())
+        .enumerate()
+        .filter(|(_, (&src1_val, &src2_val))| src1_val > lower && src2_val > lower)
+      {
+        if !visited.insert(i as i32) {
+          continue;
+        }
 
-          visited.insert(width * y + x);
+        dst_slice[i] = upper;
 
-          unsafe {
-            *dst_ptr.offset(count) = upper;
-          }
+        let x = i as i32 % width;
+        let y = i as i32 / width;
+        coords.push((x, y));
 
-          coords.push((x, y));
-
-          while let Some(pos) = coords.pop() {
-            for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
-              for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
-                let count = stride * (yy as isize) + (xx as isize);
-                if visited.contains(&(width * yy + xx))
-                  || unsafe { *src2_ptr.offset(count) <= lower }
-                {
-                  continue;
-                }
-
-                visited.insert(width * yy + xx);
-                unsafe {
-                  *dst_ptr.offset(count) = upper;
-                }
-                coords.push((xx, yy));
+        while let Some(pos) = coords.pop() {
+          for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
+            for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
+              let count = (width * yy + xx) as usize;
+              if visited.contains(&(count as i32)) || src2_slice[count] <= lower {
+                continue;
               }
+
+              visited.insert(count as i32);
+              dst_slice[count] = upper;
+              coords.push((xx, yy));
             }
           }
         }
