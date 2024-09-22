@@ -77,3 +77,15 @@ jobs:
 
       - name: Run rustfmt
         run: cargo fmt -- --check
+
+  cargo-shear:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.7
+
+      - uses: cargo-bins/cargo-binstall@v1.10.6
+
+      - run: cargo binstall --no-confirm cargo-shear
+
+      - run: cargo shear
