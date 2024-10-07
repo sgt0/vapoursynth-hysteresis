@@ -9,50 +9,24 @@ use std::{
   collections::HashSet,
   ffi::{c_void, CStr},
   ptr::null,
-  slice,
 };
 
 use const_str::cstr;
 use num_traits::NumCast;
+use vapours::frame::VapoursVideoFrame;
 use vapoursynth4_rs::{
   core::CoreRef,
   declare_plugin,
   ffi::{VSFrame, VSVideoFormat},
   frame::{Frame, FrameContext, VideoFormat, VideoFrame},
   key,
-  map::{MapMut, MapRef},
+  map::MapRef,
   node::{
     ActivationReason, Dependencies, Filter, FilterDependency, Node, RequestPattern, VideoNode,
   },
   utils::{is_constant_video_format, is_same_video_info},
   ColorFamily, SampleType,
 };
-
-trait VideoFrameExt {
-  /// Returns the video frame's data as a slice.
-  fn as_slice<T>(&self, plane: i32) -> &[T];
-
-  /// Returns the video frame's data as a mutable slice.
-  fn as_slice_mut<T>(&mut self, plane: i32) -> &mut [T];
-}
-
-impl VideoFrameExt for VideoFrame {
-  #[inline]
-  fn as_slice<T>(&self, plane: i32) -> &[T] {
-    let stride = self.stride(plane) / size_of::<T>() as isize;
-    let ptr = self.plane(plane).cast::<T>();
-    let len = (stride as i32 * self.frame_height(plane)) as usize;
-    unsafe { slice::from_raw_parts(ptr, len) }
-  }
-
-  #[inline]
-  fn as_slice_mut<T>(&mut self, plane: i32) -> &mut [T] {
-    let stride = self.stride(plane) / size_of::<T>() as isize;
-    let ptr = self.plane(plane).cast::<T>().cast_mut();
-    let len = (stride as i32 * self.frame_height(plane)) as usize;
-    unsafe { slice::from_raw_parts_mut(ptr, len) }
-  }
-}
 
 /// Returns the peak value for the bit depth of the format specified.
 const fn peak_value(format: &VSVideoFormat) -> u32 {
@@ -76,7 +50,7 @@ fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
   true
 }
 
-fn normalize_planes(input: MapRef) -> Result<Vec<bool>, String> {
+fn normalize_planes(input: &MapRef) -> Result<Vec<bool>, String> {
   let m = input.num_elements(key!("planes")).unwrap_or(-1);
   let mut process = vec![m <= 0; 3];
 
@@ -133,9 +107,12 @@ impl HysteresisFilter {
     dst: &mut VideoFrame,
     format: &VideoFormat,
   ) where
-    T: Copy + NumCast + PartialOrd,
+    T: Copy + From<u8> + NumCast + PartialOrd,
   {
-    let (lower, upper): (T, T) = (T::from(0).unwrap(), T::from(self.peak).unwrap());
+    let (lower, upper): (T, T) = (
+      <T as NumCast>::from(0).unwrap(),
+      <T as NumCast>::from(self.peak).unwrap(),
+    );
 
     let mut visited = HashSet::<i32>::new();
 
@@ -144,7 +121,7 @@ impl HysteresisFilter {
       let height = src1.frame_height(plane);
       let src1_slice = src1.as_slice::<T>(plane);
       let src2_slice = src2.as_slice::<T>(plane);
-      let dst_slice = dst.as_slice_mut::<T>(plane);
+      let dst_slice = dst.as_mut_slice::<T>(plane);
 
       dst_slice.fill(lower);
 
@@ -191,8 +168,8 @@ impl Filter for HysteresisFilter {
   type FilterData = ();
 
   fn create(
-    input: MapRef<'_>,
-    output: MapMut<'_>,
+    input: &MapRef,
+    output: &mut MapRef,
     _data: Option<Box<Self::FilterData>>,
     mut core: CoreRef,
   ) -> Result<(), Self::Error> {
