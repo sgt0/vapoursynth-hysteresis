@@ -10,8 +10,8 @@ crate-type = ["cdylib"]
 [dependencies]
 const-str = "0.5.7"
 num-traits = "0.2.19"
-vapours = { git = "https://github.com/sgt0/vapours.git", rev = "350f7e6e4eb9274d8c2cf58a1dfda9cd8e56a489" }
-vapoursynth4-rs = { git = "https://github.com/inflation/vapoursynth4-rs", rev = "05216423fb4316bf29f4e592ffc12c5a6e61bc25" }
+vapours = "0.1.1"
+vapoursynth4-rs = "0.3.0"
 
 [profile.release]
 codegen-units = 1
