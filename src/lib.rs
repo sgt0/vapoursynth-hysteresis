@@ -51,12 +51,12 @@ fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
 }
 
 fn normalize_planes(input: &MapRef) -> Result<Vec<bool>, String> {
-  let m = input.num_elements(key!("planes")).unwrap_or(-1);
+  let m = input.num_elements(key!(c"planes")).unwrap_or(-1);
   let mut process = vec![m <= 0; 3];
 
   for i in 0..m {
     let o = input
-      .get_int_saturated(key!("planes"), i)
+      .get_int_saturated(key!(c"planes"), i)
       .expect("Failed to read 'planes' parameter.");
 
     if !(0..3).contains(&o) {
@@ -168,15 +168,15 @@ impl Filter for HysteresisFilter {
   type FilterData = ();
 
   fn create(
-    input: &MapRef,
-    output: &mut MapRef,
+    input: MapRef,
+    output: MapRef,
     _data: Option<Box<Self::FilterData>>,
     mut core: CoreRef,
   ) -> Result<(), Self::Error> {
-    let Ok(node1) = input.get_video_node(key!("clipa"), 0) else {
+    let Ok(node1) = input.get_video_node(key!(c"clipa"), 0) else {
       return Err(cstr!("Failed to get clipa."));
     };
-    let Ok(node2) = input.get_video_node(key!("clipb"), 0) else {
+    let Ok(node2) = input.get_video_node(key!(c"clipb"), 0) else {
       return Err(cstr!("Failed to get clipb."));
     };
 
@@ -195,20 +195,20 @@ impl Filter for HysteresisFilter {
       ));
     }
 
-    let mut filter = Self {
+    let filter = Self {
       node1,
       node2,
       peak: peak_value(&vi.format),
-      process_planes: normalize_planes(input).expect("Failed to determine places to process."),
+      process_planes: normalize_planes(&input).expect("Failed to determine places to process."),
     };
 
     let deps = [
       FilterDependency {
-        source: filter.node1.as_mut_ptr(),
+        source: filter.node1.as_ptr(),
         request_pattern: RequestPattern::StrictSpatial,
       },
       FilterDependency {
-        source: filter.node2.as_mut_ptr(),
+        source: filter.node2.as_ptr(),
         request_pattern: if vi.num_frames <= filter.node2.info().num_frames {
           RequestPattern::StrictSpatial
         } else {
@@ -286,9 +286,9 @@ impl Filter for HysteresisFilter {
 }
 
 declare_plugin!(
-  "sgt.hysteresis",
-  "hysteresis",
-  "Hysteresis filter.",
+  c"sgt.hysteresis",
+  c"hysteresis",
+  c"Hysteresis filter.",
   (1, 0),
   VAPOURSYNTH_API_VERSION,
   0,
