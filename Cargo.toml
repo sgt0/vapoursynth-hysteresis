@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 const-str = "0.6.2"
 num-traits = "0.2.19"
-vapours = "0.1.2"
+vapours = "0.1.5"
 vapoursynth4-rs = "0.3.0"
 
 [profile.release]
