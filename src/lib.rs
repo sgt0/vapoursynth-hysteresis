@@ -1,13 +1,7 @@
-#![deny(clippy::all, clippy::pedantic, clippy::nursery, clippy::perf)]
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::similar_names)]
-
 use std::{
   cmp::{max, min},
   collections::HashSet,
-  ffi::{c_void, CStr},
+  ffi::{CStr, c_void},
   ptr::null,
 };
 
@@ -15,6 +9,7 @@ use const_str::cstr;
 use num_traits::NumCast;
 use vapours::frame::VapoursVideoFrame;
 use vapoursynth4_rs::{
+  ColorFamily, SampleType,
   core::CoreRef,
   declare_plugin,
   ffi::{VSFrame, VSVideoFormat},
@@ -25,7 +20,6 @@ use vapoursynth4_rs::{
     ActivationReason, Dependencies, Filter, FilterDependency, Node, RequestPattern, VideoNode,
   },
   utils::{is_constant_video_format, is_same_video_info},
-  ColorFamily, SampleType,
 };
 
 /// Returns the peak value for the bit depth of the format specified.
@@ -50,7 +44,7 @@ fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
   true
 }
 
-fn normalize_planes(input: &MapRef) -> Result<Vec<bool>, String> {
+fn normalize_planes(input: &MapRef<'_>) -> Result<Vec<bool>, String> {
   let m = input.num_elements(key!(c"planes")).unwrap_or(-1);
   let mut process = vec![m <= 0; 3];
 
@@ -131,7 +125,7 @@ impl HysteresisFilter {
         .iter()
         .zip(src2_slice.iter())
         .enumerate()
-        .filter(|(_, (&src1_val, &src2_val))| src1_val > lower && src2_val > lower)
+        .filter(|&(_, (&src1_val, &src2_val))| src1_val > lower && src2_val > lower)
       {
         if !visited.insert(i as i32) {
           continue;
@@ -168,10 +162,10 @@ impl Filter for HysteresisFilter {
   type FilterData = ();
 
   fn create(
-    input: MapRef,
-    output: MapRef,
+    input: MapRef<'_>,
+    output: MapRef<'_>,
     _data: Option<Box<Self::FilterData>>,
-    mut core: CoreRef,
+    mut core: CoreRef<'_>,
   ) -> Result<(), Self::Error> {
     let Ok(node1) = input.get_video_node(key!(c"clipa"), 0) else {
       return Err(cstr!("Failed to get clipa."));
@@ -234,7 +228,7 @@ impl Filter for HysteresisFilter {
     activation_reason: ActivationReason,
     _frame_data: *mut *mut c_void,
     mut ctx: FrameContext,
-    core: CoreRef,
+    core: CoreRef<'_>,
   ) -> Result<Option<VideoFrame>, Self::Error> {
     match activation_reason {
       ActivationReason::Initial => {
