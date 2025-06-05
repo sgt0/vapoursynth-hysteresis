@@ -2,7 +2,7 @@
 name = "hysteresis"
 version = "1.0.5"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
@@ -16,3 +16,34 @@ vapoursynth4-rs = "0.3.0"
 [profile.release]
 codegen-units = 1
 lto = true
+
+[lints.rust]
+deprecated_safe = "warn"
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+non_ascii_idents = "warn"
+rust_2018_idioms = "warn"
+single_use_lifetimes = "warn"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+
+as_underscore = "warn"
+default_union_representation = "warn"
+inline_asm_x86_att_syntax = "warn"
+undocumented_unsafe_blocks = "warn"
+
+cast_possible_truncation = { level = "allow", priority = 1 }
+cast_possible_wrap = { level = "allow", priority = 1 }
+cast_sign_loss = { level = "allow", priority = 1 }
+module_name_repetitions = { level = "allow", priority = 1 }
+redundant_pub_crate = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+too_many_arguments = { level = "allow", priority = 1 }
+too_many_lines = { level = "allow", priority = 1 }
+unreadable_literal = { level = "allow", priority = 1 }
