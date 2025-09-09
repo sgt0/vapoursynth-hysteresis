@@ -8,10 +8,13 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-const-str = "0.6.4"
+const-str = "=0.7.0"
 num-traits = "0.2.19"
-vapours = "0.1.5"
-vapoursynth4-rs = "0.3.0"
+vapours = "=0.2.3"
+vapoursynth4-rs = "=0.4.0"
+
+[patch.crates-io]
+vapoursynth4-rs = { git = "https://github.com/inflation/vapoursynth4-rs", rev = "5685213b75cef2c8ae3e49ed60c71cb7258bc1a5" }
 
 [profile.release]
 codegen-units = 1
