@@ -7,7 +7,7 @@ use std::{
 
 use const_str::cstr;
 use num_traits::NumCast;
-use vapours::frame::VapoursVideoFrame;
+use vapours::{enums::ColorRange, frame::VapoursVideoFrame, generic::HoldsVideoFormat};
 use vapoursynth4_rs::{
   ColorFamily, SampleType,
   core::CoreRef,
@@ -21,14 +21,6 @@ use vapoursynth4_rs::{
   },
   utils::{is_constant_video_format, is_same_video_info},
 };
-
-/// Returns the peak value for the bit depth of the format specified.
-const fn peak_value(format: &VSVideoFormat) -> u32 {
-  match format.sample_type {
-    SampleType::Float => 1,
-    SampleType::Integer => (1 << format.bits_per_sample) - 1,
-  }
-}
 
 fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
   if format.color_family == ColorFamily::Undefined {
@@ -192,7 +184,7 @@ impl Filter for HysteresisFilter {
     let filter = Self {
       node1,
       node2,
-      peak: peak_value(&vi.format),
+      peak: vi.format.peak_value(None, Some(ColorRange::Full)) as u32,
       process_planes: normalize_planes(&input).expect("Failed to determine places to process."),
     };
 
