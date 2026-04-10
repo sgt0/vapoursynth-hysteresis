@@ -14,15 +14,7 @@ X86_64_LEVELS = {
     "x86-64": None,
     "x86-64-v2": "v2",
     "x86-64-v3": "v3",
-    "x86-64-v4": "v4",
-}
-
-# Map (OS, arch) to the Rust target triple.
-RUST_TARGETS = {
-    ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
-    ("Windows", "AMD64"): "x86_64-pc-windows-gnu",
-    ("Darwin", "x86_64"): "x86_64-apple-darwin",
-    ("Darwin", "arm64"): "aarch64-apple-darwin",
+    # "x86-64-v4": "v4",
 }
 
 # Map OS to the shared library extension.
@@ -49,7 +41,6 @@ class CustomHook(BuildHookInterface[Any]):
 
         os_name = platform.system()
         arch = platform.machine()
-        rust_target = RUST_TARGETS.get((os_name, arch))
         ext = LIB_EXTENSIONS[os_name]
         prefix = LIB_PREFIXES[os_name]
         crate_name = "hysteresis"
@@ -65,16 +56,10 @@ class CustomHook(BuildHookInterface[Any]):
             env["RUSTFLAGS"] = f"-C target-cpu={target_cpu}"
 
             cmd = ["cargo", "build", "--release"]
-            if rust_target:
-                cmd += ["--target", rust_target]
 
             subprocess.run(cmd, check=True, env=env)
 
-            built = (
-                Path("target") / rust_target / "release" / lib_filename
-                if rust_target
-                else Path("target") / "release" / lib_filename
-            )
+            built = Path("target") / "release" / lib_filename
 
             dest_name = f"{prefix}{crate_name}.{level_suffix}.{ext}" if level_suffix else lib_filename
 
