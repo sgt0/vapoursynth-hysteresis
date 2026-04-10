@@ -3,7 +3,7 @@ name = "vapoursynth-hysteresis"
 version = "1.0.7"
 description = "Hysteresis filter as a VapourSynth plugin."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.4"
 license = "MIT"
 license-files = ["LICENSE.md"]
 
