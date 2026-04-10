@@ -16,6 +16,8 @@ jobs:
       url: https://pypi.org/p/vapoursynth-hysteresis
 
     permissions:
+      attestations: write
+      contents: read
       id-token: write
 
     steps:
