@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 const-str = "=1.1.0"
-num-traits = "0.2.19"
+num-traits = "=0.2.19"
 vapours = "=0.2.5"
 vapoursynth4-rs = "=0.4.0"
 
