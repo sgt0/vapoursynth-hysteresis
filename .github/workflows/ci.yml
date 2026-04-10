@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   build-release:
+    name: build-release (${{ matrix.target }})
     permissions:
       id-token: write
       contents: read
@@ -28,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         target-cpu: [x86-64]
         include:
           - os: ubuntu-latest
@@ -38,7 +39,8 @@ jobs:
             target: x86_64-pc-windows-gnu
             ext: dll
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
+            target-cpu: native
             ext: dylib
     runs-on: ${{ matrix.os }}
     steps:
@@ -50,6 +52,9 @@ jobs:
         with:
           target: ${{ matrix.target }}
           toolchain: nightly
+
+      - name: Print available CPUs
+        run: rustc --print target-cpus
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
