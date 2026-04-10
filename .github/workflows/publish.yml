@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-sdist:
-    name: build-sdist (${{ matrix.target }})
+    name: build-sdist
     runs-on: ubuntu-24.04
 
     permissions:
