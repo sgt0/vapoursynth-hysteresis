@@ -1,6 +1,6 @@
 [project]
 name = "vapoursynth-hysteresis"
-version = "1.0.7"
+version = "1.1.0"
 description = "Hysteresis filter as a VapourSynth plugin."
 readme = "README.md"
 requires-python = ">=3.12"
