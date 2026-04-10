@@ -75,10 +75,6 @@ jobs:
 
   build-wheel:
     name: build-wheel (${{ matrix.target }})
-    permissions:
-      id-token: write
-      contents: read
-      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,22 +102,6 @@ jobs:
 
       - name: Build wheel
         run: uv build --sdist --wheel
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        if: ${{ github.event_name == 'push' }}
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*.whl
-
-      - name: Upload Python artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: vapoursynth-hysteresis-python-${{ matrix.target }}
-          path: |
-            dist/*.tar.gz
-            dist/*.whl
 
   clippy:
     runs-on: ubuntu-24.04
