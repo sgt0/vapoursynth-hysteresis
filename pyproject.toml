@@ -1,0 +1,39 @@
+[project]
+name = "vapoursynth-hysteresis"
+version = "1.0.7"
+description = "Hysteresis filter as a VapourSynth plugin."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE.md"]
+
+dependencies = ["vapoursynth>=74"]
+
+[tool.hatch.build.targets.wheel]
+include = ["vapoursynth/plugins"]
+artifacts = [
+    "vapoursynth/plugins/*.dylib",
+    "vapoursynth/plugins/*.so",
+    "vapoursynth/plugins/*.dll",
+    "vapoursynth/plugins/manifest.vs",
+]
+
+[build-system]
+requires = ["hatchling==1.29.0", "packaging==26.0"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ruff==0.15.10",
+]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "FA", "UP", "B", "SIM", "I", "RUF022"]
+ignore = []
