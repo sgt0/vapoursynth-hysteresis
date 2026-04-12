@@ -33,7 +33,7 @@ LIB_PREFIXES = {
 
 
 class CustomHook(BuildHookInterface[Any]):
-    target_dir = Path("vapoursynth/plugins")
+    target_dir = Path("vapoursynth/plugins/hysteresis")
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
         build_data["pure_python"] = False
