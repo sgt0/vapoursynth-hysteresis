@@ -23,14 +23,9 @@ Description from vs-miscfilters-obsolete:
 
 ## Install
 
-Via [vsrepo][]:
-
 ```
-vsrepo install hysteresis
+pip install vapoursynth-hysteresis
 ```
-
-Or manually on Windows: download a release from the [Releases][] page and unzip
-`hysteresis.dll` into a [plugins directory][plugin-autoloading].
 
 ## API
 
