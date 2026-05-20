@@ -61,7 +61,7 @@ fn normalize_planes(input: &MapRef<'_>) -> Result<Vec<bool>, String> {
 
 /// Grows the mask in `clipa` (`node1`) into the mask in `clipb` (`node2`). This
 /// is an equivalent of the Avisynth function `mt_hysteresis`. Note that both
-/// clips are are expected to be in the typical mask range which means that all
+/// clips are expected to be in the typical mask range which means that all
 /// planes have to be in the 0-1 range for floating point formats.
 ///
 /// Specifically, Hysteresis takes two bi-level masks `clipa` and `clipb` and
