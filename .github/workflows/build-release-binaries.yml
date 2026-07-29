@@ -5,11 +5,6 @@ on:
 
 permissions: {}
 
-env:
-  CIBW_BEFORE_ALL_LINUX: curl -sSf https://sh.rustup.rs | sh -s -- -y
-  CIBW_BEFORE_ALL_WINDOWS: rustup target add x86_64-pc-windows-gnu
-  CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.cargo/bin:$PATH"
-
 jobs:
   sdist:
     runs-on: ubuntu-24.04
@@ -35,12 +30,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, windows-latest, macos-latest]
+        runner: [ubuntu-24.04, macos-26, windows-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
       - name: Build wheels
         uses: pypa/cibuildwheel@4726cd35bb13f7bde50cf2761f2499ac7b3aa32c # v4.1.1
+        env:
+          HYSTERESIS_MULTIPLE_TARGET: "1"
+          CIBW_ENVIRONMENT_PASS_LINUX: HYSTERESIS_MULTIPLE_TARGET
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheels-${{ matrix.runner }}
