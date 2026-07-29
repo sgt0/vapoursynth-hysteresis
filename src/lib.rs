@@ -275,7 +275,7 @@ declare_plugin!(
   c"sgt.hysteresis",
   c"hysteresis",
   c"Hysteresis filter.",
-  (1, 1),
+  (1, 2),
   VAPOURSYNTH_API_VERSION,
   0,
   (HysteresisFilter, None)
