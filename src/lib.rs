@@ -105,6 +105,7 @@ impl HysteresisFilter {
     for plane in (0..format.num_planes).filter(|&plane| self.process_planes[plane as usize]) {
       let width = src1.frame_width(plane);
       let height = src1.frame_height(plane);
+      let stride = src1.stride(plane) as i32 / size_of::<T>() as i32;
       let src1_slice = src1.as_slice::<T>(plane);
       let src2_slice = src2.as_slice::<T>(plane);
       let dst_slice = dst.as_mut_slice::<T>(plane);
@@ -113,31 +114,31 @@ impl HysteresisFilter {
 
       let mut coords = Vec::<(i32, i32)>::new();
 
-      for (i, (_, _)) in src1_slice
-        .iter()
-        .zip(src2_slice.iter())
-        .enumerate()
-        .filter(|&(_, (&src1_val, &src2_val))| src1_val > lower && src2_val > lower)
-      {
-        if !visited.insert(i as i32) {
+      for (i, (_, _)) in src1_slice.iter().zip(src2_slice.iter()).enumerate().filter(
+        |&(i, (&src1_val, &src2_val))| {
+          i as i32 % stride < width && src1_val > lower && src2_val > lower
+        },
+      ) {
+        let x = i as i32 % stride;
+        let y = i as i32 / stride;
+
+        if !visited.insert(width * y + x) {
           continue;
         }
 
         dst_slice[i] = upper;
 
-        let x = i as i32 % width;
-        let y = i as i32 / width;
         coords.push((x, y));
 
         while let Some(pos) = coords.pop() {
           for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
             for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
-              let count = (width * yy + xx) as usize;
-              if visited.contains(&(count as i32)) || src2_slice[count] <= lower {
+              let count = (stride * yy + xx) as usize;
+              if visited.contains(&(width * yy + xx)) || src2_slice[count] <= lower {
                 continue;
               }
 
-              visited.insert(count as i32);
+              visited.insert(width * yy + xx);
               dst_slice[count] = upper;
               coords.push((xx, yy));
             }
