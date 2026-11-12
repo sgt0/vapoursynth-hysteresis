@@ -1,12 +1,13 @@
 use std::{
   cmp::{max, min},
-  collections::HashSet,
-  ffi::{CStr, c_void},
+  ffi::{CStr, CString, c_void},
   ptr::null,
 };
 
 use const_str::cstr;
+use error::HysteresisError;
 use num_traits::NumCast;
+use rustc_hash::FxHashSet;
 use vapours::{
   enums::ColorRange,
   frame::{VapoursVideoFrame, VapoursVideoFrameMut},
@@ -26,6 +27,8 @@ use vapoursynth4_rs::{
   utils::{is_constant_video_format, is_same_video_info},
 };
 
+mod error;
+
 fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
   if format.color_family == ColorFamily::Undefined {
     return false;
@@ -40,21 +43,23 @@ fn is_8_to_16_or_float_format(format: &VSVideoFormat) -> bool {
   true
 }
 
-fn normalize_planes(input: &MapRef<'_>) -> Result<Vec<bool>, String> {
-  let m = input.num_elements(key!(c"planes")).unwrap_or(-1);
-  let mut process = vec![m <= 0; 3];
+fn normalize_planes(input: &MapRef<'_>) -> Result<[bool; 3], HysteresisError> {
+  let Some(m) = input.num_elements(key!(c"planes")) else {
+    return Ok([true; 3]);
+  };
+  let mut process = [m <= 0; 3];
 
   for i in 0..m {
-    let o = input
-      .get_int_saturated(key!(c"planes"), i)
-      .expect("Failed to read 'planes' parameter.");
+    let Ok(o) = input.get_int_saturated(key!(c"planes"), i) else {
+      return Err(HysteresisError::InvalidPlanes);
+    };
 
     if !(0..3).contains(&o) {
-      return Err(format!("Plane index {o} is out of range [0, 3)."));
+      return Err(HysteresisError::PlaneOutOfRange(o));
     }
 
     if process[o as usize] {
-      return Err(format!("Plane {o} is specified more than once."));
+      return Err(HysteresisError::DuplicatePlane(o));
     }
 
     process[o as usize] = true;
@@ -86,7 +91,7 @@ struct HysteresisFilter {
   peak: u32,
 
   /// Indicates whether or not the plane at index `i` should be processed.
-  process_planes: Vec<bool>,
+  process_planes: [bool; 3],
 }
 
 impl HysteresisFilter {
@@ -96,17 +101,18 @@ impl HysteresisFilter {
     src2: &VideoFrame,
     dst: &mut VideoFrameMut,
     format: &VideoFormat,
-  ) where
+  ) -> Result<(), HysteresisError>
+  where
     T: Copy + From<u8> + NumCast + PartialOrd,
   {
-    let (lower, upper): (T, T) = (
-      <T as NumCast>::from(0).unwrap(),
-      <T as NumCast>::from(self.peak).unwrap(),
-    );
+    let lower = <T as From<u8>>::from(0);
+    let Some(upper) = <T as NumCast>::from(self.peak) else {
+      return Err(HysteresisError::PeakOutOfRange);
+    };
 
     // Intentionally shared across all planes to mirror miscfilters behavior.
     // https://github.com/vapoursynth/vs-miscfilters-obsolete/blob/07e0589a381f7deb3bf533bb459a94482bccc5c7/src/miscfilters.cpp#L201-L206
-    let mut visited = HashSet::<i32>::new();
+    let mut visited = FxHashSet::<i32>::default();
 
     for plane in (0..format.num_planes).filter(|&plane| self.process_planes[plane as usize]) {
       let width = src1.frame_width(plane);
@@ -154,11 +160,13 @@ impl HysteresisFilter {
         }
       }
     }
+
+    Ok(())
   }
 }
 
 impl Filter for HysteresisFilter {
-  type Error = &'static CStr;
+  type Error = CString;
   type FrameType = VideoFrame;
   type FilterData = ();
 
@@ -169,32 +177,28 @@ impl Filter for HysteresisFilter {
     core: CoreRef<'_>,
   ) -> Result<(), Self::Error> {
     let Ok(node1) = input.get_video_node(key!(c"clipa"), 0) else {
-      return Err(cstr!("Failed to get clipa."));
+      return Err(HysteresisError::MissingClip("clipa").into());
     };
     let Ok(node2) = input.get_video_node(key!(c"clipb"), 0) else {
-      return Err(cstr!("Failed to get clipb."));
+      return Err(HysteresisError::MissingClip("clipb").into());
     };
 
     let n = node1.clone();
     let vi = n.info();
 
     if !is_constant_video_format(vi) || !is_8_to_16_or_float_format(&vi.format) {
-      return Err(cstr!(
-        "hysteresis: only constant format 8-16 bits integer and 32 bits float input supported"
-      ));
+      return Err(HysteresisError::UnsupportedFormat.into());
     }
 
     if !is_same_video_info(vi, node2.info()) {
-      return Err(cstr!(
-        "hysteresis: both clips must have the same dimensions and format"
-      ));
+      return Err(HysteresisError::MismatchedClips.into());
     }
 
     let filter = Self {
       node1,
       node2,
       peak: vi.format.peak_value(None, Some(ColorRange::Full)) as u32,
-      process_planes: normalize_planes(&input).expect("Failed to determine places to process."),
+      process_planes: normalize_planes(&input)?,
     };
 
     let deps = [
@@ -212,13 +216,11 @@ impl Filter for HysteresisFilter {
       },
     ];
 
-    core.create_video_filter(
-      &mut output,
-      cstr!("Hysteresis"),
-      vi,
-      Box::new(filter),
-      Dependencies::new(&deps).unwrap(),
-    );
+    let Some(deps) = Dependencies::new(&deps) else {
+      return Err(HysteresisError::TooManyDependencies.into());
+    };
+
+    core.create_video_filter(&mut output, cstr!("Hysteresis"), vi, Box::new(filter), deps);
 
     Ok(())
   }
@@ -244,11 +246,7 @@ impl Filter for HysteresisFilter {
 
         let plane_src: [*const VSFrame; 3] = self
           .process_planes
-          .iter()
-          .map(|&p| if p { null() } else { src1.as_ptr() })
-          .collect::<Vec<_>>()
-          .try_into()
-          .unwrap();
+          .map(|p| if p { null() } else { src1.as_ptr() });
 
         // SAFETY: Everything is taken from `src1` and both of the planes arrays
         // have 3 entries.
@@ -264,11 +262,11 @@ impl Filter for HysteresisFilter {
         };
 
         if fi.bytes_per_sample == 1 {
-          self.process_frame::<u8>(&src1, &src2, &mut dst, fi);
+          self.process_frame::<u8>(&src1, &src2, &mut dst, fi)?;
         } else if fi.bytes_per_sample == 2 {
-          self.process_frame::<u16>(&src1, &src2, &mut dst, fi);
+          self.process_frame::<u16>(&src1, &src2, &mut dst, fi)?;
         } else {
-          self.process_frame::<f32>(&src1, &src2, &mut dst, fi);
+          self.process_frame::<f32>(&src1, &src2, &mut dst, fi)?;
         }
 
         return Ok(Some(dst.freeze()));

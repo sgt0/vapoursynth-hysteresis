@@ -1,0 +1,60 @@
+# Limit large types on the stack (bytes)
+too-large-for-stack = 128
+
+# Force pass-by-reference for types larger than 128 bytes
+pass-by-value-size-limit = 128
+
+# Force explicit Copy bound for generic types with size > 32 bytes
+trivial-copy-size-limit = 32
+
+# Prevent huge stack arrays (warn for arrays > 8KB)
+array-size-threshold = 8192
+
+# Force simpler function logic
+cognitive-complexity-threshold = 15
+
+# Force simpler type signatures
+type-complexity-threshold = 100
+
+# Force fewer function parameters
+too-many-arguments-threshold = 5
+
+# Force shorter functions
+too-many-lines-threshold = 75
+
+# Reject 1-char identifiers (except common loop/math vars)
+min-ident-chars-threshold = 2
+allowed-idents-below-min-chars = ["i", "j", "k", "x", "y", "z", "w", "h", "n", "m", "_"]
+
+# Allow dbg! macro in test code
+allow-dbg-in-tests = true
+
+# Allow unwrap/expect/panic in tests
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+# Allow breaking exported API during development
+avoid-breaking-exported-api = false
+
+# Enforce consistent struct field initialization order
+check-inconsistent-struct-field-initializers = true
+
+# Flag commented-out code
+lint-commented-code = true
+
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "use `rustc_hash::FxHashMap` (or `foldhash::HashMap`) for better performance" },
+  { path = "std::collections::HashSet", reason = "use `rustc_hash::FxHashSet` (or `foldhash::HashSet`) for better performance" },
+  { path = "std::collections::LinkedList", reason = "use `Vec` or `VecDeque` instead" },
+  { path = "std::sync::Mutex", reason = "use `parking_lot::Mutex` for better performance and no poisoning" },
+  { path = "std::sync::RwLock", reason = "use `parking_lot::RwLock` for better performance and no poisoning" },
+]
+
+# Enforce explicit error handling
+disallowed-methods = [
+  { path = "std::env::var", reason = "use `std::env::var_os` with explicit error handling or a config module" },
+  { path = "std::mem::drop", reason = "use `_ = expr` to explicitly discard a #[must_use] value; use a scope block to drop a guard early" },
+  { path = "core::option::Option::unwrap_or", reason = "use `map_or`, `if let`/`let-else`, or propagate with `?`" },
+  { path = "core::result::Result::unwrap_or", reason = "use `map_or`, `if let`/`let-else`, or propagate with `?`" },
+]
