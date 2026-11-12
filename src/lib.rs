@@ -7,15 +7,19 @@ use std::{
 
 use const_str::cstr;
 use num_traits::NumCast;
-use vapours::{enums::ColorRange, frame::VapoursVideoFrame, generic::HoldsVideoFormat};
+use vapours::{
+  enums::ColorRange,
+  frame::{VapoursVideoFrame, VapoursVideoFrameMut},
+  generic::HoldsVideoFormat,
+};
 use vapoursynth4_rs::{
   ColorFamily, SampleType,
   core::CoreRef,
   declare_plugin,
   ffi::{VSFrame, VSVideoFormat},
-  frame::{Frame, FrameContext, VideoFormat, VideoFrame},
+  frame::{FrameContext, VideoFormat, VideoFrame, VideoFrameMut},
   key,
-  map::MapRef,
+  map::{MapMut, MapRef},
   node::{
     ActivationReason, Dependencies, Filter, FilterDependency, Node, RequestPattern, VideoNode,
   },
@@ -90,7 +94,7 @@ impl HysteresisFilter {
     &self,
     src1: &VideoFrame,
     src2: &VideoFrame,
-    dst: &mut VideoFrame,
+    dst: &mut VideoFrameMut,
     format: &VideoFormat,
   ) where
     T: Copy + From<u8> + NumCast + PartialOrd,
@@ -100,47 +104,51 @@ impl HysteresisFilter {
       <T as NumCast>::from(self.peak).unwrap(),
     );
 
+    // Intentionally shared across all planes to mirror miscfilters behavior.
+    // https://github.com/vapoursynth/vs-miscfilters-obsolete/blob/07e0589a381f7deb3bf533bb459a94482bccc5c7/src/miscfilters.cpp#L201-L206
     let mut visited = HashSet::<i32>::new();
 
     for plane in (0..format.num_planes).filter(|&plane| self.process_planes[plane as usize]) {
       let width = src1.frame_width(plane);
       let height = src1.frame_height(plane);
-      let stride = src1.stride(plane) as i32 / size_of::<T>() as i32;
-      let src1_slice = src1.as_slice::<T>(plane);
-      let src2_slice = src2.as_slice::<T>(plane);
-      let dst_slice = dst.as_mut_slice::<T>(plane);
+      let src2_rows: Vec<&[T]> = src2.rows(plane).collect();
+      let mut dst_rows: Vec<&mut [T]> = dst.rows_mut(plane).collect();
 
-      dst_slice.fill(lower);
+      for row in &mut dst_rows {
+        row.fill(lower);
+      }
 
       let mut coords = Vec::<(i32, i32)>::new();
 
-      for (i, (_, _)) in src1_slice.iter().zip(src2_slice.iter()).enumerate().filter(
-        |&(i, (&src1_val, &src2_val))| {
-          i as i32 % stride < width && src1_val > lower && src2_val > lower
-        },
-      ) {
-        let x = i as i32 % stride;
-        let y = i as i32 / stride;
+      for (y, (src1_row, src2_row)) in src1.rows::<T>(plane).zip(&src2_rows).enumerate() {
+        for (x, (&src1_val, &src2_val)) in src1_row.iter().zip(src2_row.iter()).enumerate() {
+          if src1_val <= lower || src2_val <= lower {
+            continue;
+          }
 
-        if !visited.insert(width * y + x) {
-          continue;
-        }
+          let (x, y) = (x as i32, y as i32);
 
-        dst_slice[i] = upper;
+          if !visited.insert(width * y + x) {
+            continue;
+          }
 
-        coords.push((x, y));
+          dst_rows[y as usize][x as usize] = upper;
 
-        while let Some(pos) = coords.pop() {
-          for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
-            for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
-              let count = (stride * yy + xx) as usize;
-              if visited.contains(&(width * yy + xx)) || src2_slice[count] <= lower {
-                continue;
+          coords.push((x, y));
+
+          while let Some(pos) = coords.pop() {
+            for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
+              for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
+                if visited.contains(&(width * yy + xx))
+                  || src2_rows[yy as usize][xx as usize] <= lower
+                {
+                  continue;
+                }
+
+                visited.insert(width * yy + xx);
+                dst_rows[yy as usize][xx as usize] = upper;
+                coords.push((xx, yy));
               }
-
-              visited.insert(width * yy + xx);
-              dst_slice[count] = upper;
-              coords.push((xx, yy));
             }
           }
         }
@@ -156,9 +164,9 @@ impl Filter for HysteresisFilter {
 
   fn create(
     input: MapRef<'_>,
-    output: MapRef<'_>,
-    _data: Option<Box<Self::FilterData>>,
-    mut core: CoreRef<'_>,
+    mut output: MapMut<'_>,
+    _data: Option<&Self::FilterData>,
+    core: CoreRef<'_>,
   ) -> Result<(), Self::Error> {
     let Ok(node1) = input.get_video_node(key!(c"clipa"), 0) else {
       return Err(cstr!("Failed to get clipa."));
@@ -205,7 +213,7 @@ impl Filter for HysteresisFilter {
     ];
 
     core.create_video_filter(
-      output,
+      &mut output,
       cstr!("Hysteresis"),
       vi,
       Box::new(filter),
@@ -242,14 +250,18 @@ impl Filter for HysteresisFilter {
           .try_into()
           .unwrap();
 
-        let mut dst = core.new_video_frame2(
-          fi,
-          src1.frame_width(0),
-          src1.frame_height(0),
-          &plane_src,
-          &[0, 1, 2],
-          Some(&src1),
-        );
+        // SAFETY: Everything is taken from `src1` and both of the planes arrays
+        // have 3 entries.
+        let mut dst = unsafe {
+          core.new_video_frame2(
+            fi,
+            src1.frame_width(0),
+            src1.frame_height(0),
+            &plane_src,
+            &[0, 1, 2],
+            Some(&src1),
+          )
+        };
 
         if fi.bytes_per_sample == 1 {
           self.process_frame::<u8>(&src1, &src2, &mut dst, fi);
@@ -259,7 +271,7 @@ impl Filter for HysteresisFilter {
           self.process_frame::<f32>(&src1, &src2, &mut dst, fi);
         }
 
-        return Ok(Some(dst));
+        return Ok(Some(dst.freeze()));
       }
       ActivationReason::Error => {}
     }
