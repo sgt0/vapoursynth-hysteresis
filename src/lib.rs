@@ -1,5 +1,4 @@
 use std::{
-  cmp::{max, min},
   ffi::{CStr, CString, c_void},
   ptr::null,
 };
@@ -7,7 +6,6 @@ use std::{
 use const_str::cstr;
 use error::HysteresisError;
 use num_traits::NumCast;
-use rustc_hash::FxHashSet;
 use vapours::{
   enums::ColorRange,
   frame::{VapoursVideoFrame, VapoursVideoFrameMut},
@@ -112,11 +110,19 @@ impl HysteresisFilter {
 
     // Intentionally shared across all planes to mirror miscfilters behavior.
     // https://github.com/vapoursynth/vs-miscfilters-obsolete/blob/07e0589a381f7deb3bf533bb459a94482bccc5c7/src/miscfilters.cpp#L201-L206
-    let mut visited = FxHashSet::<i32>::default();
+    //
+    // A dense byte per linear pixel index replaces the hash set, so every
+    // visit test is a single load instead of a hash lookup and insertion.
+    let max_pixels = (0..format.num_planes)
+      .filter(|&plane| self.process_planes[plane as usize])
+      .map(|plane| src1.frame_width(plane) as usize * src1.frame_height(plane) as usize)
+      .fold(0, usize::max);
+    let mut visited = vec![0_u8; max_pixels];
+    let mut coords = Vec::<(usize, usize)>::new();
 
     for plane in (0..format.num_planes).filter(|&plane| self.process_planes[plane as usize]) {
-      let width = src1.frame_width(plane);
-      let height = src1.frame_height(plane);
+      let width = src1.frame_width(plane) as usize;
+      let height = src1.frame_height(plane) as usize;
       let src2_rows: Vec<&[T]> = src2.rows(plane).collect();
       let mut dst_rows: Vec<&mut [T]> = dst.rows_mut(plane).collect();
 
@@ -124,36 +130,52 @@ impl HysteresisFilter {
         row.fill(lower);
       }
 
-      let mut coords = Vec::<(i32, i32)>::new();
-
       for (y, (src1_row, src2_row)) in src1.rows::<T>(plane).zip(&src2_rows).enumerate() {
         for (x, (&src1_val, &src2_val)) in src1_row.iter().zip(src2_row.iter()).enumerate() {
           if src1_val <= lower || src2_val <= lower {
             continue;
           }
 
-          let (x, y) = (x as i32, y as i32);
+          let idx = width * y + x;
 
-          if !visited.insert(width * y + x) {
+          if visited[idx] != 0 {
             continue;
           }
 
-          dst_rows[y as usize][x as usize] = upper;
+          visited[idx] = 1;
+          dst_rows[y][x] = upper;
 
           coords.push((x, y));
 
-          while let Some(pos) = coords.pop() {
-            for yy in max(pos.1 - 1, 0)..=min(pos.1 + 1, height - 1) {
-              for xx in max(pos.0 - 1, 0)..=min(pos.0 + 1, width - 1) {
-                if visited.contains(&(width * yy + xx))
-                  || src2_rows[yy as usize][xx as usize] <= lower
-                {
-                  continue;
-                }
+          while let Some((x, y)) = coords.pop() {
+            macro_rules! visit {
+              ($nidx:expr, $nx:expr, $ny:expr) => {{
+                let idx = $nidx;
 
-                visited.insert(width * yy + xx);
-                dst_rows[yy as usize][xx as usize] = upper;
-                coords.push((xx, yy));
+                if visited[idx] == 0 && src2_rows[$ny][$nx] > lower {
+                  visited[idx] = 1;
+                  dst_rows[$ny][$nx] = upper;
+                  coords.push(($nx, $ny));
+                }
+              }};
+            }
+
+            if x > 0 && x + 1 < width && y > 0 && y + 1 < height {
+              let idx = width * y + x;
+
+              visit!(idx - width - 1, x - 1, y - 1);
+              visit!(idx - width, x, y - 1);
+              visit!(idx - width + 1, x + 1, y - 1);
+              visit!(idx - 1, x - 1, y);
+              visit!(idx + 1, x + 1, y);
+              visit!(idx + width - 1, x - 1, y + 1);
+              visit!(idx + width, x, y + 1);
+              visit!(idx + width + 1, x + 1, y + 1);
+            } else {
+              for yy in y.saturating_sub(1)..=(y + 1).min(height - 1) {
+                for xx in x.saturating_sub(1)..=(x + 1).min(width - 1) {
+                  visit!(width * yy + xx, xx, yy);
+                }
               }
             }
           }
