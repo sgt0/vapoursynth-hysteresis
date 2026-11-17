@@ -108,11 +108,8 @@ impl HysteresisFilter {
       return Err(HysteresisError::PeakOutOfRange);
     };
 
-    // Intentionally shared across all planes to mirror miscfilters behavior.
-    // https://github.com/vapoursynth/vs-miscfilters-obsolete/blob/07e0589a381f7deb3bf533bb459a94482bccc5c7/src/miscfilters.cpp#L201-L206
-    //
-    // A dense byte per linear pixel index replaces the hash set, so every
-    // visit test is a single load instead of a hash lookup and insertion.
+    // `visited` is intentionally shared across all planes to match miscfilters
+    // behavior: https://github.com/vapoursynth/vs-miscfilters-obsolete/blob/07e0589a381f7deb3bf533bb459a94482bccc5c7/src/miscfilters.cpp#L201-L206
     let max_pixels = (0..format.num_planes)
       .filter(|&plane| self.process_planes[plane as usize])
       .map(|plane| src1.frame_width(plane) as usize * src1.frame_height(plane) as usize)
